@@ -1,6 +1,6 @@
 [package]
 name = "leifstout/dataservicetyped"
-description = "Data handler and replication"
+description = "Data handler and replication, now even better!"
 version = "1.0.0"
 license = "MIT"
 authors = ["Leif Stout <leifstout@gmail.com>"]

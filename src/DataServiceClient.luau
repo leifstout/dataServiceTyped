@@ -58,7 +58,7 @@ function DataServiceClient.remove<T>(self: DataServiceClient<T>, path: { string 
 	self:get(path).Remove(pos)
 end
 
-type DataServiceClient<T> = typeof(DataServiceClient) & {
+export type DataServiceClient<T> = typeof(DataServiceClient) & {
 	hasLoaded: boolean,
 	loadedSignal: Signal.Signal<>,
 	networker: Networker.Client,
