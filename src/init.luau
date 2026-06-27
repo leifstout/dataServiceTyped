@@ -1,9 +1,9 @@
 local RunService = game:GetService("RunService")
 
-local DataServiceClient = require(script.Parent.DataServiceClient)
-local DataServiceServer = require(script.Parent.DataServiceServer)
-local DataServiceUtils = require(script.Parent.DataServiceUtils)
-local Value = require(script.Parent.Value)
+local DataServiceClient = require(script.DataServiceClient)
+local DataServiceServer = require(script.DataServiceServer)
+local DataServiceUtils = require(script.DataServiceUtils)
+local Value = require(script.Value)
 
 export type Client<T> = DataServiceClient.DataServiceClient<T>
 export type Server<T> = DataServiceServer.DataServiceServer<T>
