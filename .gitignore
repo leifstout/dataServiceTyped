@@ -1,0 +1,10 @@
+# Project place file
+/dataService.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+Packages/
+ServerPackages/
+build/

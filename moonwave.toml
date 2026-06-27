@@ -1,0 +1,23 @@
+title = "DataServiceTyped"
+
+classOrder = [
+	"DataServiceServer",
+]
+
+[docusaurus]
+tagline = "Persistent, auto-replicated, and observable data for Roblox Luau."
+
+[home]
+enabled = true
+
+[[home.features]]
+title = "Effortless setup"
+description = "Initialize on server and client with just a few lines. Data templates reconcile automatically so you never worry about missing keys."
+
+[[home.features]]
+title = "Automatic replication"
+description = "Server changes replicate automatically. Clients keep a local mirror."
+
+[[home.features]]
+title = "Targeted reactivity"
+description = "Subscribe to exactly what you need with per-path signals, no manual diffing or complex change detection."
