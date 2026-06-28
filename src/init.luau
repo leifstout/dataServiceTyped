@@ -12,7 +12,7 @@ export type Value<T> = Value.Value<T>
 export type PublicDataServiceServer<T> = DataServiceServer.Public<T>
 export type ServerPlayerData<T> = { [Player]: Value<T> } & {
 	Service: PublicDataServiceServer<T>,
-	Global: Value<T>,
+	Global: Value.GlobalValue<T>,
 }
 
 return function<T>(options: DataOptions<T>)
