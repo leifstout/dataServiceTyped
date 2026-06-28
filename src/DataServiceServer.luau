@@ -91,6 +91,11 @@ function DataServiceServer:init<T>(options: DataOptions<T>)
 	self.options = options
 	self.networker = Networker.server.new("DataService", self, {})
 	self.playerStore = ProfileStore.New(options.profileStoreIndex or DEFAULT_PROFILE_STORE_INDEX, options.template)
+	self.globalData = Value.new(options.template, nil, nil, function(replicateType: string, path: { string }, ...)
+		for _, player in Players:GetPlayers() do
+			self.networker:fire(player, replicateType, path, ...)
+		end
+	end)
 
 	for _, player: Player in Players:GetPlayers() do
 		task.spawn(function()
@@ -106,7 +111,7 @@ function DataServiceServer:init<T>(options: DataOptions<T>)
 		self:_playerRemoving(player)
 	end)
 
-	return self.data, self
+	return self.data, self, self.globalData
 end
 
 local function storeCancel(player: Player)

@@ -8,6 +8,12 @@ local ARRAY_INSERTED_KEY = "OnInsert"
 local ARRAY_REMOVED_KEY = "OnRemove"
 local INSERT = "Insert"
 local REMOVE = "Remove"
+local ADD = "Add"
+local SUB = "Sub"
+local MUL = "Mul"
+local DIV = "Div"
+local INC = "Inc"
+local DEC = "Dec"
 local meta = {}
 local Value = { shouldRecordPath = false }
 
@@ -100,6 +106,47 @@ local Changed = createCallbackFn(CHANGED_KEY)
 local OnInsert = createCallbackFn(ARRAY_INSERTED_KEY)
 local OnRemove = createCallbackFn(ARRAY_REMOVED_KEY)
 
+local function createNumberOperation(operation: (number, number) -> number)
+	return function(value: Value<number>)
+		return function(amount: number, shouldReplicate: boolean?)
+			return value(function(current)
+				assert(type(current) == "number", "attempted to perform a number operation on a non-number value")
+				return operation(current, amount)
+			end, shouldReplicate)
+		end
+	end
+end
+
+local function createNumberStep(amount: number)
+	return function(value: Value<number>)
+		return function(shouldReplicate: boolean?)
+			return value(function(current)
+				assert(type(current) == "number", "attempted to perform a number operation on a non-number value")
+				return current + amount
+			end, shouldReplicate)
+		end
+	end
+end
+
+local Add = createNumberOperation(function(value, amount)
+	return value + amount
+end)
+
+local Sub = createNumberOperation(function(value, amount)
+	return value - amount
+end)
+
+local Mul = createNumberOperation(function(value, amount)
+	return value * amount
+end)
+
+local Div = createNumberOperation(function(value, amount)
+	return value / amount
+end)
+
+local Inc = createNumberStep(1)
+local Dec = createNumberStep(-1)
+
 local function fireChangeAndReplicate<T>(
 	value: Value<T>,
 	prevRawValue: T?,
@@ -187,6 +234,12 @@ local FUNCTIONAL_KEYS = {
 	[REMOVE] = ArrayRemove,
 	[ARRAY_INSERTED_KEY] = OnInsert,
 	[ARRAY_REMOVED_KEY] = OnRemove,
+	[ADD] = Add,
+	[SUB] = Sub,
+	[MUL] = Mul,
+	[DIV] = Div,
+	[INC] = Inc,
+	[DEC] = Dec,
 }
 
 meta.__index = function(value: Value<any>, index: string)
@@ -247,6 +300,14 @@ type OnArrayRemove<T> = ((T, number?) -> ()) -> () -> ()
 type OnArrayInsert<T> = ((T, number?) -> ()) -> () -> ()
 type Changed<T> = ((T, T, string?) -> ()) -> () -> ()
 type ValueMeta<T> = { Changed: Changed<T> }
+type ValueNumberMeta = {
+	Add: (number, boolean?) -> number,
+	Sub: (number, boolean?) -> number,
+	Mul: (number, boolean?) -> number,
+	Div: (number, boolean?) -> number,
+	Inc: (boolean?) -> number,
+	Dec: (boolean?) -> number,
+}
 type ValueArrayMeta<T> = {
 	Remove: ArrayRemove<T>,
 	Insert: ArrayInsert<T>,
@@ -254,12 +315,17 @@ type ValueArrayMeta<T> = {
 	OnInsert: OnArrayInsert<T>,
 }
 export type ValueBase<T> = (((T | (T) -> T)?, boolean?) -> T) & ValueMeta<T>
+type ValueNumberBase<T> = ValueBase<T> & ValueNumberMeta
 type ValueArrayBase<T, U> = ValueBase<T> & ValueArrayMeta<U>
 export type Value<T> = ValueType<T>
 
 -- selene: allow(undefined_variable)
 type function ValueType(T)
 	local base = ValueBase(T)
+	if T:is("number") then
+		return ValueNumberBase(T)
+	end
+
 	if not T:is("table") then
 		return base
 	end

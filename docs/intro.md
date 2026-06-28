@@ -60,6 +60,14 @@ local Data = require(Path.To.Data)
 Data[player].currency(50)
 ```
 
+Use the `Global` field to interact with every player's data at once:
+
+```lua
+local Data = require(Path.To.Data)
+
+Data.Global.currency(50)
+```
+
 ## 4) Usage on client
 
 Use Data directly on the client:
