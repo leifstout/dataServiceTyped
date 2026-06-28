@@ -57,8 +57,24 @@ Index Data with a player to interact with their data:
 ```lua
 local Data = require(Path.To.Data)
 
-Data[player].currency(50)
+Data.server[player].currency(50)
 ```
+
+Use the `Global` field to interact with every player's data at once:
+
+```lua
+local Data = require(Path.To.Data)
+
+Data.server.Global.currency.Add(5)
+
+Data.server.Global.currency.Changed(function(player: Player, newValue: number, oldValue: number)
+	print(player.Name, oldValue, "->", newValue)
+end)
+```
+
+Global mutations use each loaded player's normal data value, so their individual
+`Changed` callbacks still run and each change replicates to the correct client.
+Global `Changed` callbacks also run for mutations made through `Data.server[player]`.
 
 ## 4) Usage on client
 
@@ -67,9 +83,9 @@ Use Data directly on the client:
 ```lua
 local Data = require(Path.To.Data)
 
-Data.currency(50)
+Data.client.currency(50)
 
-Data.inventory.apples.Changed(function(n: number)
+Data.client.inventory.apples.Changed(function(n: number)
 	print("Apples changed to", n)
 end)
 ```

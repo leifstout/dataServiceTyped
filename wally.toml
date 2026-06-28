@@ -1,9 +1,10 @@
 [package]
-name = "leifstout/dataservicetyped"
+name = "crimssel1/dataservicetyped"
 description = "Data handler and replication, now even better!"
-version = "1.0.2"
+version = "1.1.1"
 license = "MIT"
-authors = ["Leif Stout <leifstout@gmail.com>"]
+authors = ["Leif Stout <leifstout@gmail.com>", "Terms", "Crimssel"]
+repository = "https://github.com/crimssel1/dataServiceTyped"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 

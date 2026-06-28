@@ -12,11 +12,27 @@ export type Value<T> = Value.Value<T>
 export type PublicDataServiceServer<T> = DataServiceServer.Public<T>
 export type ServerPlayerData<T> = { [Player]: Value<T> } & {
 	Service: PublicDataServiceServer<T>,
+	Global: Value.GlobalValue<T>,
 }
 
 return function<T>(options: DataOptions<T>)
+	local client = {} :: Value<T>
+	local server = {} :: ServerPlayerData<T>
+
+	if RunService:IsClient() then
+		client = DataServiceClient:init()
+	end
+
+	if RunService:IsServer() then
+		local playerData, dataService, globalData = DataServiceServer:init(options)
+
+		playerData.Service = dataService
+		playerData.Global = globalData
+		server = playerData
+	end
+
 	return {
-		client = (if RunService:IsClient() then DataServiceClient:init() else {}) :: Value<T>,
-		server = (if RunService:IsServer() then DataServiceServer:init(options) else {}) :: ServerPlayerData<T>,
+		client = client :: Value<T>,
+		server = server :: ServerPlayerData<T>,
 	}
 end
