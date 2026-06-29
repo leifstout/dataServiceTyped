@@ -41,6 +41,10 @@ Then run:
 wally install
 ```
 
+:::important
+DataServiceTyped uses Luau's new type solver for its typed data API. Enable the new type solver in Workspace properties or Luau LSP settings for types and IntelliSense to work correctly.
+:::
+
 ## Create Your Data
 
 Create one shared data module. Most games call it `Data.luau`.
