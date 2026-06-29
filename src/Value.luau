@@ -49,7 +49,7 @@ local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?)
 		if changedCbs then
 			local raw = value()
 			for _, cb in changedCbs do
-				cb(raw)
+				task.spawn(cb, raw)
 			end
 		end
 	end
@@ -125,7 +125,7 @@ local function fireChangeAndReplicate<T>(
 		if changedCbs then
 			local v = currentValue()
 			for _, cb in changedCbs do
-				cb(v, prevRawValue, prevKey)
+				task.spawn(cb, v, prevRawValue, prevKey)
 			end
 		end
 
@@ -154,7 +154,7 @@ local function ArrayInsert<T>(value: Value<any>)
 		if insertedCbs then
 			local posInsertedAt = pos or table.find(raw, item)
 			for _, cb in insertedCbs do
-				cb(item, posInsertedAt)
+				task.spawn(cb, item, posInsertedAt)
 			end
 		end
 	end
@@ -171,7 +171,7 @@ local function ArrayRemove<T>(value: Value<any>)
 		if removedCbs then
 			local posRemovedFrom = pos or #raw + 1
 			for _, cb in removedCbs do
-				cb(removed, posRemovedFrom)
+				task.spawn(cb, removed, posRemovedFrom)
 			end
 		end
 

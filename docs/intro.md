@@ -12,7 +12,7 @@ Add `DataServiceTyped` to your `wally.toml`:
 
 ```toml
 [dependencies]
-DataServiceTyped = "leifstout/dataservicetyped@1.0.0"
+DataServiceTyped = "leifstout/dataservicetyped@1.0.3"
 ```
 
 This will install the newest version of `DataServiceTyped` for the major version `1`.
