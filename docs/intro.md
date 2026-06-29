@@ -302,4 +302,5 @@ return DataServiceTyped({
 
 ## Next Steps
 
+- Read about [service functions](./service-functions) for profile access, reset tools, loading hooks, and global messages.
 - Browse the [complete API reference](https://leifstout.github.io/dataServiceTyped/api)
