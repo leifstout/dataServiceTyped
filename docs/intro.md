@@ -32,7 +32,7 @@ Add `DataServiceTyped` to your `wally.toml`:
 
 ```toml
 [dependencies]
-DataServiceTyped = "leifstout/dataservicetyped@1.0.3"
+DataServiceTyped = "leifstout/dataservicetyped@1.0.4"
 ```
 
 Then run:

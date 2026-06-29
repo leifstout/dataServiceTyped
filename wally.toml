@@ -1,7 +1,7 @@
 [package]
 name = "leifstout/dataservicetyped"
 description = "Data handler and replication, now even better!"
-version = "1.0.3"
+version = "1.0.4"
 license = "MIT"
 authors = ["Leif Stout <leifstout@gmail.com>"]
 registry = "https://github.com/UpliftGames/wally-index"
@@ -15,4 +15,4 @@ Signal = "sleitnick/signal@2.0.0"
 Networker = "leifstout/networker@0.3.1"
 
 [server-dependencies]
-ProfileStore = "lm-loleris/profilestore@1.0.4"
+ProfileStore = "lm-loleris/profilestore@1.0.3"
