@@ -1,3 +1,5 @@
+local DataServiceUtils = {}
+
 export type DataOptions<T> = {
 	template: T,
 	useMock: boolean?,
@@ -9,4 +11,17 @@ export type DataOptions<T> = {
 	profileStoreDataPrefix: string?,
 }
 
-return nil
+function DataServiceUtils.deepClone<T>(value: T): T
+	if type(value) ~= "table" then
+		return value
+	end
+
+	local cloned = table.clone(value :: any)
+	for key, child in cloned do
+		cloned[key] = DataServiceUtils.deepClone(child)
+	end
+
+	return cloned :: any
+end
+
+return DataServiceUtils

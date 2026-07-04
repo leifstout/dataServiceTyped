@@ -19,11 +19,14 @@ return function<T>(options: DataOptions<T>)
 	local client = {} :: Value<T>
 	local server = {} :: ServerPlayerData<T>
 
-	if RunService:IsClient() then
+	-- Preview tools execute while Studio is not running, so no server can ever
+	-- replicate player data. Return an isolated Value tree with the same client API
+	-- instead of entering either runtime initialization path.
+	if not RunService:IsRunning() then
+		client = Value.new(DataServiceUtils.deepClone(options.template))
+	elseif RunService:IsClient() then
 		client = DataServiceClient:init()
-	end
-
-	if RunService:IsServer() then
+	elseif RunService:IsServer() then
 		local playerData, dataService, globalData = DataServiceServer:init(options)
 
 		playerData.Service = dataService

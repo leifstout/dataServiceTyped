@@ -12,7 +12,6 @@ local Value = require(script.Parent.Value)
 local DataServiceUtils = require(script.Parent.DataServiceUtils)
 local Signal = require(Packages.Signal)
 local Networker = require(Packages.Networker)
-local ProfileStore = if RunService:IsServer() then require(Packages.ProfileStore) else nil :: any
 
 local DATA_PREFIX = "PLAYER_"
 local DEFAULT_PROFILE_STORE_INDEX = "Default"
@@ -87,6 +86,8 @@ local DataServiceServer = {
 function DataServiceServer:init<T>(options: DataOptions<T>)
 	assert(RunService:IsServer(), "DataServiceServer can only be used on the server.")
 	assert(not self.playerStore, "DataServiceServer has already been initialized.")
+	local ProfileStore = require(Packages.ProfileStore)
+
 	Value.shouldRecordPath = true
 	self.options = options
 	self.networker = Networker.server.new("DataService", self, {})

@@ -90,6 +90,24 @@ Data.client.inventory.apples.Changed(function(n: number)
 end)
 ```
 
+### UI previews and edit mode
+
+When DataServiceTyped is required while Studio is not running, `Data.client` is
+initialized immediately from a deep copy of the data template. This allows UI
+preview tools such as UILabs to require UI components that depend on data
+without waiting for a game server.
+
+The preview value tree uses the normal `Data.client` API, including getters,
+setters, math operations, and change callbacks. Preview changes are local to the
+copy and are never replicated or saved. Once the game is running, client
+initialization continues to wait for the player's real replicated data.
+
+```lua
+-- Returns the template default in edit-mode UI previews and the player's
+-- replicated value at runtime.
+local currency = Data.client.currency()
+```
+
 ## Next steps
 
 - Browse the **complete API reference**: https://leifstout.github.io/dataServicetyped/api
