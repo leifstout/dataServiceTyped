@@ -1,7 +1,7 @@
 [package]
 name = "crimssel1/dataservicetyped"
 description = "Data handler and replication, now even better!"
-version = "1.1.1"
+version = "1.1.2"
 license = "MIT"
 authors = ["Leif Stout <leifstout@gmail.com>", "Terms", "Crimssel"]
 repository = "https://github.com/crimssel1/dataServiceTyped"
