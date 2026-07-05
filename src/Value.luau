@@ -6,8 +6,10 @@ local REPLICATOR_KEY = "___R"
 local CHANGED_KEY = "_ChangedCbs"
 local ARRAY_INSERTED_KEY = "_OnInsertCbs"
 local ARRAY_REMOVED_KEY = "_OnRemoveCbs"
+local VIDE_SOURCE_KEY = "___V"
+local VIDE_UNSUB_KEY = "___VU"
 local meta = {}
-local Value = { shouldRecordPath = false }
+local Value = { shouldRecordPath = false, toVideSource = nil :: ((any) -> any)? }
 
 local function adoptChildren(value: Value<any>)
 	local raw = value()
@@ -179,12 +181,53 @@ local function ArrayRemove<T>(value: Value<any>)
 	end
 end
 
+local function ToVideSource(value: Value<any>)
+	return function()
+		local cachedSource = rawget(value, VIDE_SOURCE_KEY)
+		if cachedSource then
+			return cachedSource
+		end
+
+		assert(Value.toVideSource, "No vide source constructor set. Pass options.videSource to DataService")
+
+		local source = Value.toVideSource(value())
+		local syncing = false
+
+		local unsubscribe = Changed(value)(function(newValue)
+			if syncing then
+				return
+			end
+
+			syncing = true
+			source(newValue)
+			syncing = false
+		end)
+		rawset(value, VIDE_UNSUB_KEY, unsubscribe)
+
+		local function wrappedSource(...)
+			if select("#", ...) == 0 then
+				return source()
+			end
+
+			local newValue = source(...)
+			syncing = true
+			value(newValue)
+			syncing = false
+			return newValue
+		end
+
+		rawset(value, VIDE_SOURCE_KEY, wrappedSource)
+		return wrappedSource
+	end
+end
+
 local FUNCTIONAL_KEYS = {
 	Changed = Changed,
 	Insert = ArrayInsert,
 	Remove = ArrayRemove,
 	OnInsert = OnInsert,
 	OnRemove = OnRemove,
+	ToVideSource = ToVideSource,
 }
 
 meta.__index = function(value: Value<any>, index: string)
@@ -244,7 +287,8 @@ type ArrayInsert<T> = (T, number?, boolean?) -> ()
 type OnArrayRemove<T> = ((T, number?) -> ()) -> () -> ()
 type OnArrayInsert<T> = ((T, number?) -> ()) -> () -> ()
 type Changed<T> = ((T, T, string?) -> ()) -> () -> ()
-type ValueMeta<T> = { Changed: Changed<T> }
+type ToVideSource<T> = () -> (T?) -> T
+type ValueMeta<T> = { Changed: Changed<T>, ToVideSource: ToVideSource<T> }
 type ValueArrayMeta<T> = {
 	Remove: ArrayRemove<T>,
 	Insert: ArrayInsert<T>,

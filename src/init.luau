@@ -15,6 +15,9 @@ export type ServerPlayerData<T> = { [Player]: Value<T> } & {
 }
 
 return function<T>(options: DataOptions<T>)
+	if options.videSource then
+		Value.toVideSource = options.videSource
+	end
 	return {
 		client = (if RunService:IsClient() then DataServiceClient:init(options.template) else {}) :: Value<T>,
 		server = (if RunService:IsServer() then DataServiceServer:init(options) else {}) :: ServerPlayerData<T>,

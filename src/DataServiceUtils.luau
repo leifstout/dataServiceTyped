@@ -7,6 +7,7 @@ export type DataOptions<T> = {
 	resetData: boolean?,
 	profileStoreIndex: string?,
 	profileStoreDataPrefix: string?,
+	videSource: ((any) -> any)?,
 }
 
 return nil
