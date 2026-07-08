@@ -8,7 +8,8 @@ running server.
 
 ## Documentation
 
-- **Getting started:** https://leifstout.github.io/dataServiceTyped/docs/intro
-- **Complete API reference:** https://leifstout.github.io/dataServiceTyped/api
+- [Getting started](https://leifstout.github.io/dataServiceTyped/docs/intro)
+- [Complete API reference](https://leifstout.github.io/dataServiceTyped/api)
+- Video tutorial coming soon
 
 If you're new to the package, start with the getting started guide and then use the API reference for full method/type details.

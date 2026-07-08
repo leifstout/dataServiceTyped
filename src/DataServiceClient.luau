@@ -1,4 +1,3 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Packages = script.Parent.Parent
@@ -15,8 +14,13 @@ local DataServiceClient = {
 	loadedSignal = Signal.new(),
 }
 
-function DataServiceClient.init<T>(self: DataServiceClient<T>)
+function DataServiceClient.init<T>(self: DataServiceClient<T>, template: T)
 	self.networker = Networker.client.new("DataService", self)
+
+	if not RunService:IsRunning() then
+		self:load(template)
+	end
+
 	if self.hasLoaded then
 		return self.data
 	end

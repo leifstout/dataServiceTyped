@@ -6,9 +6,9 @@ local REPLICATOR_KEY = "___R"
 local GLOBAL_TARGET_VISITOR_KEY = "___GTV"
 local GLOBAL_VALUE_KEY = "___GV"
 local PLAYER_KEY = "___PL"
-local CHANGED_KEY = "Changed"
-local ARRAY_INSERTED_KEY = "OnInsert"
-local ARRAY_REMOVED_KEY = "OnRemove"
+local CHANGED_KEY = "_ChangedCbs"
+local ARRAY_INSERTED_KEY = "_OnInsertCbs"
+local ARRAY_REMOVED_KEY = "_OnRemoveCbs"
 local INSERT = "Insert"
 local REMOVE = "Remove"
 local ADD = "Add"
@@ -110,7 +110,7 @@ local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?,
 		local raw = value()
 		if changedCbs then
 			for _, cb in changedCbs do
-				cb(raw, previousValue)
+				task.spawn(cb, raw, previousValue)
 			end
 		end
 
@@ -119,7 +119,7 @@ local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?,
 		if globalChangedCbs then
 			local player = rawget(value, PLAYER_KEY) :: Player
 			for _, cb in globalChangedCbs do
-				cb(player, raw, previousValue)
+				task.spawn(cb, player, raw, previousValue)
 			end
 		end
 	end
@@ -240,13 +240,13 @@ local function fireChangeAndReplicate<T>(
 			local v = currentValue()
 			if changedCbs then
 				for _, cb in changedCbs do
-					cb(v, prevRawValue, prevKey)
+					task.spawn(cb, v, prevRawValue, prevKey)
 				end
 			end
 			if globalChangedCbs then
 				local player = rawget(currentValue, PLAYER_KEY) :: Player
 				for _, cb in globalChangedCbs do
-					cb(player, v, prevRawValue, prevKey)
+					task.spawn(cb, player, v, prevRawValue, prevKey)
 				end
 			end
 		end
@@ -283,7 +283,7 @@ local function ArrayInsert<T>(value: Value<any>)
 		if insertedCbs then
 			local posInsertedAt = pos or table.find(raw, item)
 			for _, cb in insertedCbs do
-				cb(item, posInsertedAt)
+				task.spawn(cb, item, posInsertedAt)
 			end
 		end
 
@@ -293,7 +293,7 @@ local function ArrayInsert<T>(value: Value<any>)
 			local player = rawget(value, PLAYER_KEY) :: Player
 			local posInsertedAt = pos or table.find(raw, item)
 			for _, cb in globalInsertedCbs do
-				cb(player, item, posInsertedAt)
+				task.spawn(cb, player, item, posInsertedAt)
 			end
 		end
 	end
@@ -317,7 +317,7 @@ local function ArrayRemove<T>(value: Value<any>)
 		if removedCbs then
 			local posRemovedFrom = pos or #raw + 1
 			for _, cb in removedCbs do
-				cb(removed, posRemovedFrom)
+				task.spawn(cb, removed, posRemovedFrom)
 			end
 		end
 
@@ -327,7 +327,7 @@ local function ArrayRemove<T>(value: Value<any>)
 			local player = rawget(value, PLAYER_KEY) :: Player
 			local posRemovedFrom = pos or #raw + 1
 			for _, cb in globalRemovedCbs do
-				cb(player, removed, posRemovedFrom)
+				task.spawn(cb, player, removed, posRemovedFrom)
 			end
 		end
 
@@ -336,11 +336,11 @@ local function ArrayRemove<T>(value: Value<any>)
 end
 
 local FUNCTIONAL_KEYS = {
-	[CHANGED_KEY] = Changed,
+	Changed = Changed,
 	[INSERT] = ArrayInsert,
 	[REMOVE] = ArrayRemove,
-	[ARRAY_INSERTED_KEY] = OnInsert,
-	[ARRAY_REMOVED_KEY] = OnRemove,
+	OnInsert = OnInsert,
+	OnRemove = OnRemove,
 	[ADD] = Add,
 	[SUB] = Sub,
 	[MUL] = Mul,

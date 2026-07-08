@@ -25,7 +25,7 @@ return function<T>(options: DataOptions<T>)
 	if not RunService:IsRunning() then
 		client = Value.new(DataServiceUtils.deepClone(options.template))
 	elseif RunService:IsClient() then
-		client = DataServiceClient:init()
+		client = DataServiceClient:init(options.template)
 	elseif RunService:IsServer() then
 		local playerData, dataService, globalData = DataServiceServer:init(options)
 
