@@ -1,10 +1,10 @@
 [package]
-name = "crimssel1/dataservicetyped"
+name = "termsofgit/dataservicetyped"
 description = "Data handler and replication, now even better!"
 version = "1.1.2"
 license = "MIT"
 authors = ["Leif Stout <leifstout@gmail.com>", "Terms", "Crimssel"]
-repository = "https://github.com/crimssel1/dataServiceTyped"
+repository = "https://github.com/termsofgit/dataServiceTyped"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 
