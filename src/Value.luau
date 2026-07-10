@@ -6,6 +6,8 @@ local REPLICATOR_KEY = "___R"
 local CHANGED_KEY = "_ChangedCbs"
 local ARRAY_INSERTED_KEY = "_OnInsertCbs"
 local ARRAY_REMOVED_KEY = "_OnRemoveCbs"
+local KEY_ADDED_KEY = "_OnKeyAddedCbs"
+local KEY_REMOVED_KEY = "_OnKeyRemovedCbs"
 local meta = {}
 local Value = { shouldRecordPath = false }
 
@@ -97,6 +99,8 @@ end
 local Changed = createCallbackFn(CHANGED_KEY)
 local OnInsert = createCallbackFn(ARRAY_INSERTED_KEY)
 local OnRemove = createCallbackFn(ARRAY_REMOVED_KEY)
+local OnKeyAdded = createCallbackFn(KEY_ADDED_KEY)
+local OnKeyRemoved = createCallbackFn(KEY_REMOVED_KEY)
 
 local function fireChangeAndReplicate<T>(
 	value: Value<T>,
@@ -110,6 +114,28 @@ local function fireChangeAndReplicate<T>(
 	local currentValue: any = value
 	local prevKey = nil
 	local replicaterFn
+
+	local immediateParentValue = rawget(value, PARENT_KEY) :: any
+	if immediateParentValue ~= nil and replicateType == "set" then
+		local key = rawget(value, KEY_KEY)
+		local rawValue = value()
+
+		if prevRawValue == nil and rawValue ~= nil then
+			local keyAddedCbs = rawget(immediateParentValue, KEY_ADDED_KEY) :: any
+			if keyAddedCbs then
+				for _, cb in keyAddedCbs do
+					task.spawn(cb, key, rawValue)
+				end
+			end
+		elseif prevRawValue ~= nil and rawValue == nil then
+			local keyRemovedCbs = rawget(immediateParentValue, KEY_REMOVED_KEY) :: any
+			if keyRemovedCbs then
+				for _, cb in keyRemovedCbs do
+					task.spawn(cb, key, prevRawValue)
+				end
+			end
+		end
+	end
 
 	repeat
 		local pathKey = rawget(currentValue, KEY_KEY)
@@ -185,6 +211,8 @@ local FUNCTIONAL_KEYS = {
 	Remove = ArrayRemove,
 	OnInsert = OnInsert,
 	OnRemove = OnRemove,
+	OnKeyAdded = OnKeyAdded,
+	OnKeyRemoved = OnKeyRemoved,
 }
 
 meta.__index = function(value: Value<any>, index: string)
@@ -244,7 +272,10 @@ type ArrayInsert<T> = (T, number?, boolean?) -> ()
 type OnArrayRemove<T> = ((T, number?) -> ()) -> () -> ()
 type OnArrayInsert<T> = ((T, number?) -> ()) -> () -> ()
 type Changed<T> = ((T, T, string?) -> ()) -> () -> ()
+type OnKeyAdded<T> = ((string, T) -> ()) -> () -> ()
+type OnKeyRemoved<T> = ((string, T) -> ()) -> () -> ()
 type ValueMeta<T> = { Changed: Changed<T> }
+type ValueDictMeta<T> = { OnKeyAdded: OnKeyAdded<T>, OnKeyRemoved: OnKeyRemoved<T> }
 type ValueArrayMeta<T> = {
 	Remove: ArrayRemove<T>,
 	Insert: ArrayInsert<T>,
@@ -267,7 +298,9 @@ type function ValueType(T)
 		local new = types.newtable()
 		local index = indexer.index
 		local result = indexer.readresult
-		local valueBase = if index:is("number") then ValueArrayBase(T, result) else base
+		local valueBase = if index:is("number")
+			then ValueArrayBase(T, result)
+			else types.intersectionof(ValueDictMeta(result), base)
 
 		new:setindexer(index, ValueType(result))
 		return types.intersectionof(valueBase, new)
@@ -277,7 +310,7 @@ type function ValueType(T)
 			children:setproperty(key, ValueType(prop.read))
 		end
 
-		return types.intersectionof(base, children)
+		return types.intersectionof(base, children, ValueDictMeta(types.any))
 	end
 end
 
