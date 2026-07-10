@@ -5,7 +5,7 @@ local Signal = require(Packages.Signal)
 local Networker = require(Packages.Networker)
 local Value = require(script.Parent.Value)
 
-if RunService:IsServer() then
+if RunService:IsServer() and RunService:IsRunning() then
 	return {} :: any
 end
 
@@ -15,9 +15,9 @@ local DataServiceClient = {
 }
 
 function DataServiceClient.init<T>(self: DataServiceClient<T>, template: T)
-	self.networker = Networker.client.new("DataService", self)
-
-	if not RunService:IsRunning() then
+	if RunService:IsRunning() then
+		self.networker = Networker.client.new("DataService", self)
+	else
 		self:load(template)
 	end
 
