@@ -412,7 +412,7 @@ export type DataServiceServer<T> = typeof(DataServiceServer) & {
 }
 
 export type Public<T> = {
-	waitForData: (self: any, player: Player) -> Value.Value<any>,
+	waitForData: (self: any, player: Player) -> Value.Value<T>,
 	onPlayerInit: (self: any, player: Player, data: T) -> (),
 	getProfile: (self: any, player: Player) -> any,
 	asyncGetProfile: (self: any, userId: number | string) -> any,
