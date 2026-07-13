@@ -32,7 +32,7 @@ Add `DataServiceTyped` to your `wally.toml`:
 
 ```toml
 [dependencies]
-DataServiceTyped = "termsofgit/dataservicetyped@1.1.2"
+DataServiceTyped = "termsofgit/dataservicetyped@1.1.4"
 ```
 
 Then run:
@@ -272,6 +272,37 @@ Remove dictionary entries by setting them to `nil`.
 
 ```lua
 Data[player].items.sword_001(nil)
+```
+
+Listen for dictionary keys being added or removed with `.OnKeyAdded` and `.OnKeyRemoved`.
+
+```lua
+Data[player].items.OnKeyAdded(function(key, item)
+	print("Added item", key, item.dmg)
+end)
+
+Data[player].items.OnKeyRemoved(function(key, item)
+	print("Removed item", key, item.dmg)
+end)
+```
+
+Both functions return a disconnect callback, just like `.Changed`.
+
+These fire when a key changes from `nil` to a value, or from a value to `nil`.
+
+```lua
+Data[player].items.potion_001({
+	health = 25,
+	dmg = 0,
+}) -- OnKeyAdded
+
+Data[player].items.potion_001(nil) -- OnKeyRemoved
+```
+
+Changing an existing key fires `.Changed`, not `.OnKeyAdded`.
+
+```lua
+Data[player].items.potion_001.dmg(5)
 ```
 
 ## Options
