@@ -1,9 +1,10 @@
 [package]
-name = "leifstout/dataservicetyped"
+name = "termsofgit/dataservicetyped"
 description = "Data handler and replication, now even better!"
-version = "1.0.5"
+version = "1.1.4"
 license = "MIT"
-authors = ["Leif Stout <leifstout@gmail.com>"]
+authors = ["Leif Stout <leifstout@gmail.com>", "Terms", "Crimssel"]
+repository = "https://github.com/termsofgit/dataServiceTyped"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 

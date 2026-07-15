@@ -3,13 +3,74 @@ local KEY_KEY = "___K"
 local CHILDREN_KEY = "___C"
 local CONTAINER_KEY = "___X"
 local REPLICATOR_KEY = "___R"
+local GLOBAL_TARGET_VISITOR_KEY = "___GTV"
+local GLOBAL_VALUE_KEY = "___GV"
+local PLAYER_KEY = "___PL"
 local CHANGED_KEY = "_ChangedCbs"
 local ARRAY_INSERTED_KEY = "_OnInsertCbs"
 local ARRAY_REMOVED_KEY = "_OnRemoveCbs"
 local KEY_ADDED_KEY = "_OnKeyAddedCbs"
 local KEY_REMOVED_KEY = "_OnKeyRemovedCbs"
+local INSERT = "Insert"
+local REMOVE = "Remove"
+local ADD = "Add"
+local SUB = "Sub"
+local MUL = "Mul"
+local DIV = "Div"
+local INC = "Inc"
+local DEC = "Dec"
 local meta = {}
 local Value = { shouldRecordPath = false }
+
+type GlobalTargetVisitor = (((Player, Value<any>) -> ()) -> ())
+
+local function getGlobalVisitorAndPath(value: Value<any>): (GlobalTargetVisitor?, { any })
+	local path = {}
+	local currentValue: any = value
+	local visitor: GlobalTargetVisitor? = nil
+
+	repeat
+		local pathKey = rawget(currentValue, KEY_KEY)
+		if pathKey ~= nil then
+			table.insert(path, pathKey)
+		end
+
+		visitor = visitor or rawget(currentValue, GLOBAL_TARGET_VISITOR_KEY)
+		currentValue = rawget(currentValue, PARENT_KEY)
+	until currentValue == nil
+
+	return visitor, path
+end
+
+local function resolvePath(root: Value<any>, path: { any }): Value<any>
+	local currentValue = root
+	for index = #path, 1, -1 do
+		currentValue = (currentValue :: any)[path[index]]
+	end
+	return currentValue
+end
+
+local function visitGlobalTargets(
+	value: Value<any>,
+	callback: (player: Player, targetValue: Value<any>) -> any
+): (boolean, any)
+	local visitor, path = getGlobalVisitorAndPath(value)
+	if not visitor then
+		return false, nil
+	end
+
+	local lastResult = nil
+	visitor(function(player: Player, root: Value<any>)
+		lastResult = callback(player, resolvePath(root, path))
+	end)
+	return true, lastResult
+end
+
+local function createChild(raw: any, key: any, parent: Value<any>): Value<any>
+	local globalParent = rawget(parent, GLOBAL_VALUE_KEY) :: Value<any>?
+	local globalChild = if globalParent then (globalParent :: any)[key] else nil
+	return Value.new(raw, key, parent, nil, globalChild, rawget(parent, PLAYER_KEY))
+end
 
 local function adoptChildren(value: Value<any>)
 	local raw = value()
@@ -26,7 +87,7 @@ local function adoptChildren(value: Value<any>)
 	for key, _ in raw :: any do
 		local childValue = children[key]
 		if not childValue then
-			childValue = Value.new(raw, key, value)
+			childValue = createChild(raw, key, value)
 			children[key] = childValue
 		end
 	end
@@ -45,13 +106,22 @@ local function adoptChildren(value: Value<any>)
 	end
 end
 
-local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?)
+local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?, previousValue: any?)
 	if not initial then
 		local changedCbs = rawget(value, CHANGED_KEY) :: any
+		local raw = value()
 		if changedCbs then
-			local raw = value()
 			for _, cb in changedCbs do
-				task.spawn(cb, raw)
+				task.spawn(cb, raw, previousValue)
+			end
+		end
+
+		local globalValue = rawget(value, GLOBAL_VALUE_KEY) :: Value<any>?
+		local globalChangedCbs = if globalValue then rawget(globalValue, CHANGED_KEY) :: any else nil
+		if globalChangedCbs then
+			local player = rawget(value, PLAYER_KEY) :: Player
+			for _, cb in globalChangedCbs do
+				task.spawn(cb, player, raw, previousValue)
 			end
 		end
 	end
@@ -61,8 +131,9 @@ local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?)
 		return
 	end
 
-	for _, childValue in childrenValues do
-		sendChangedSignalToChildren(childValue)
+	for key, childValue in childrenValues do
+		local previousChildValue = if type(previousValue) == "table" then previousValue[key] else nil
+		sendChangedSignalToChildren(childValue, nil, previousChildValue)
 	end
 end
 
@@ -101,6 +172,47 @@ local OnInsert = createCallbackFn(ARRAY_INSERTED_KEY)
 local OnRemove = createCallbackFn(ARRAY_REMOVED_KEY)
 local OnKeyAdded = createCallbackFn(KEY_ADDED_KEY)
 local OnKeyRemoved = createCallbackFn(KEY_REMOVED_KEY)
+
+local function createNumberOperation(operation: (number, number) -> number)
+	return function(value: Value<number>)
+		return function(amount: number, shouldReplicate: boolean?)
+			return value(function(current)
+				assert(type(current) == "number", "attempted to perform a number operation on a non-number value")
+				return operation(current, amount)
+			end, shouldReplicate)
+		end
+	end
+end
+
+local function createNumberStep(amount: number)
+	return function(value: Value<number>)
+		return function(shouldReplicate: boolean?)
+			return value(function(current)
+				assert(type(current) == "number", "attempted to perform a number operation on a non-number value")
+				return current + amount
+			end, shouldReplicate)
+		end
+	end
+end
+
+local Add = createNumberOperation(function(value, amount)
+	return value + amount
+end)
+
+local Sub = createNumberOperation(function(value, amount)
+	return value - amount
+end)
+
+local Mul = createNumberOperation(function(value, amount)
+	return value * amount
+end)
+
+local Div = createNumberOperation(function(value, amount)
+	return value / amount
+end)
+
+local Inc = createNumberStep(1)
+local Dec = createNumberStep(-1)
 
 local function fireChangeAndReplicate<T>(
 	value: Value<T>,
@@ -148,10 +260,20 @@ local function fireChangeAndReplicate<T>(
 		end
 
 		local changedCbs = rawget(currentValue, CHANGED_KEY) :: any
-		if changedCbs then
+		local globalValue = rawget(currentValue, GLOBAL_VALUE_KEY) :: Value<any>?
+		local globalChangedCbs = if globalValue then rawget(globalValue, CHANGED_KEY) :: any else nil
+		if changedCbs or globalChangedCbs then
 			local v = currentValue()
-			for _, cb in changedCbs do
-				task.spawn(cb, v, prevRawValue, prevKey)
+			if changedCbs then
+				for _, cb in changedCbs do
+					task.spawn(cb, v, prevRawValue, prevKey)
+				end
+			end
+			if globalChangedCbs then
+				local player = rawget(currentValue, PLAYER_KEY) :: Player
+				for _, cb in globalChangedCbs do
+					task.spawn(cb, player, v, prevRawValue, prevKey)
+				end
 			end
 		end
 
@@ -166,6 +288,13 @@ end
 
 local function ArrayInsert<T>(value: Value<any>)
 	return function(item: T, pos: number?, shouldReplicate: boolean?)
+		local isGlobal = visitGlobalTargets(value, function(_player, targetValue)
+			return targetValue.Insert(item, pos, shouldReplicate)
+		end)
+		if isGlobal then
+			return
+		end
+
 		local raw = value()
 		if pos then
 			table.insert(raw, pos, item)
@@ -183,11 +312,28 @@ local function ArrayInsert<T>(value: Value<any>)
 				task.spawn(cb, item, posInsertedAt)
 			end
 		end
+
+		local globalValue = rawget(value, GLOBAL_VALUE_KEY) :: Value<any>?
+		local globalInsertedCbs = if globalValue then rawget(globalValue, ARRAY_INSERTED_KEY) :: any else nil
+		if globalInsertedCbs then
+			local player = rawget(value, PLAYER_KEY) :: Player
+			local posInsertedAt = pos or table.find(raw, item)
+			for _, cb in globalInsertedCbs do
+				task.spawn(cb, player, item, posInsertedAt)
+			end
+		end
 	end
 end
 
 local function ArrayRemove<T>(value: Value<any>)
 	return function(pos: number?, shouldReplicate: boolean?)
+		local isGlobal, lastRemoved = visitGlobalTargets(value, function(_player, targetValue)
+			return targetValue.Remove(pos, shouldReplicate)
+		end)
+		if isGlobal then
+			return lastRemoved
+		end
+
 		local raw = value()
 		local removed = table.remove(raw, pos)
 		adoptChildren(value)
@@ -201,16 +347,32 @@ local function ArrayRemove<T>(value: Value<any>)
 			end
 		end
 
+		local globalValue = rawget(value, GLOBAL_VALUE_KEY) :: Value<any>?
+		local globalRemovedCbs = if globalValue then rawget(globalValue, ARRAY_REMOVED_KEY) :: any else nil
+		if globalRemovedCbs then
+			local player = rawget(value, PLAYER_KEY) :: Player
+			local posRemovedFrom = pos or #raw + 1
+			for _, cb in globalRemovedCbs do
+				task.spawn(cb, player, removed, posRemovedFrom)
+			end
+		end
+
 		return removed
 	end
 end
 
 local FUNCTIONAL_KEYS = {
 	Changed = Changed,
-	Insert = ArrayInsert,
-	Remove = ArrayRemove,
+	[INSERT] = ArrayInsert,
+	[REMOVE] = ArrayRemove,
 	OnInsert = OnInsert,
 	OnRemove = OnRemove,
+	[ADD] = Add,
+	[SUB] = Sub,
+	[MUL] = Mul,
+	[DIV] = Div,
+	[INC] = Inc,
+	[DEC] = Dec,
 	OnKeyAdded = OnKeyAdded,
 	OnKeyRemoved = OnKeyRemoved,
 }
@@ -233,7 +395,7 @@ meta.__index = function(value: Value<any>, index: string)
 	end
 
 	-- Adding new child index
-	local newChild = Value.new(raw, index, value)
+	local newChild = createChild(raw, index, value)
 	if not valueChildren then
 		valueChildren = {}
 		rawset(value, CHILDREN_KEY, valueChildren)
@@ -253,6 +415,13 @@ meta.__call = function(value: Value<any>, ...)
 	end
 
 	local param, shouldReplicate = ...
+	local isGlobal, lastResult = visitGlobalTargets(value, function(_player, targetValue)
+		return targetValue(param, shouldReplicate)
+	end)
+	if isGlobal then
+		return if lastResult ~= nil then lastResult else raw
+	end
+
 	if type(param) == "function" then
 		rawParent[key] = (param :: any)(raw) -- someValue(fn(prev) return prev + 1 end)
 	else
@@ -261,7 +430,7 @@ meta.__call = function(value: Value<any>, ...)
 
 	local updatedRaw = rawParent[key]
 	adoptChildren(value)
-	sendChangedSignalToChildren(value, true)
+	sendChangedSignalToChildren(value, true, raw)
 	fireChangeAndReplicate(value, raw, "set", shouldReplicate, updatedRaw)
 
 	return updatedRaw
@@ -275,6 +444,16 @@ type Changed<T> = ((T, T, string?) -> ()) -> () -> ()
 type OnKeyAdded<T> = ((string, T) -> ()) -> () -> ()
 type OnKeyRemoved<T> = ((string, T) -> ()) -> () -> ()
 type ValueMeta<T> = { Changed: Changed<T> }
+type GlobalChanged<T> = ((Player, T, T, string?) -> ()) -> () -> ()
+type GlobalValueMeta<T> = { Changed: GlobalChanged<T> }
+type ValueNumberMeta = {
+	Add: (number, boolean?) -> number,
+	Sub: (number, boolean?) -> number,
+	Mul: (number, boolean?) -> number,
+	Div: (number, boolean?) -> number,
+	Inc: (boolean?) -> number,
+	Dec: (boolean?) -> number,
+}
 type ValueDictMeta<T> = { OnKeyAdded: OnKeyAdded<T>, OnKeyRemoved: OnKeyRemoved<T> }
 type ValueArrayMeta<T> = {
 	Remove: ArrayRemove<T>,
@@ -282,13 +461,28 @@ type ValueArrayMeta<T> = {
 	OnRemove: OnArrayRemove<T>,
 	OnInsert: OnArrayInsert<T>,
 }
+type GlobalValueArrayMeta<T> = {
+	Remove: ArrayRemove<T>,
+	Insert: ArrayInsert<T>,
+	OnRemove: ((Player, T, number?) -> ()) -> () -> (),
+	OnInsert: ((Player, T, number?) -> ()) -> () -> (),
+}
 export type ValueBase<T> = (((T | (T) -> T)?, boolean?) -> T) & ValueMeta<T>
+type ValueNumberBase<T> = ValueBase<T> & ValueNumberMeta
 type ValueArrayBase<T, U> = ValueBase<T> & ValueArrayMeta<U>
 export type Value<T> = ValueType<T>
+export type GlobalValueBase<T> = (((T | (T) -> T)?, boolean?) -> T) & GlobalValueMeta<T>
+type GlobalValueNumberBase<T> = GlobalValueBase<T> & ValueNumberMeta
+type GlobalValueArrayBase<T, U> = GlobalValueBase<T> & GlobalValueArrayMeta<U>
+export type GlobalValue<T> = GlobalValueType<T>
 
 -- selene: allow(undefined_variable)
 type function ValueType(T)
 	local base = ValueBase(T)
+	if T:is("number") then
+		return ValueNumberBase(T)
+	end
+
 	if not T:is("table") then
 		return base
 	end
@@ -314,18 +508,63 @@ type function ValueType(T)
 	end
 end
 
-function Value.new<T>(raw: T, key: string?, parent: Value<any>?, replicator: (({ string }, any?) -> ())?): ValueType<T>
+-- selene: allow(undefined_variable)
+type function GlobalValueType(T)
+	local base = GlobalValueBase(T)
+	if T:is("number") then
+		return GlobalValueNumberBase(T)
+	end
+
+	if not T:is("table") then
+		return base
+	end
+
+	local indexer = T:indexer()
+	if indexer then
+		local new = types.newtable()
+		local index = indexer.index
+		local result = indexer.readresult
+		local valueBase = if index:is("number") then GlobalValueArrayBase(T, result) else base
+
+		new:setindexer(index, GlobalValueType(result))
+		return types.intersectionof(valueBase, new)
+	else
+		local children = types.newtable()
+		for key, prop in T:properties() do
+			children:setproperty(key, GlobalValueType(prop.read))
+		end
+
+		return types.intersectionof(base, children)
+	end
+end
+
+function Value.new<T>(
+	raw: T,
+	key: string?,
+	parent: Value<any>?,
+	replicator: (({ string }, any?) -> ())?,
+	globalValue: Value<any>?,
+	player: Player?
+): ValueType<T>
 	local value = setmetatable({
 		[KEY_KEY] = key,
 		[PARENT_KEY] = parent,
 		[CONTAINER_KEY] = raw,
 		[REPLICATOR_KEY] = replicator,
+		[GLOBAL_VALUE_KEY] = globalValue,
+		[PLAYER_KEY] = player,
 		[CHILDREN_KEY] = nil,
 	}, meta)
 
 	adoptChildren(value :: any)
 
 	return value :: any
+end
+
+function Value.newGlobal<T>(raw: T, visitor: GlobalTargetVisitor): GlobalValueType<T>
+	local value = Value.new(raw) :: any
+	rawset(value, GLOBAL_TARGET_VISITOR_KEY, visitor)
+	return value
 end
 
 return Value

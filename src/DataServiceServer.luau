@@ -10,7 +10,6 @@ local Value = require(script.Parent.Value)
 local DataServiceUtils = require(script.Parent.DataServiceUtils)
 local Signal = require(Packages.Signal)
 local Networker = require(Packages.Networker)
-local ProfileStore = if RunService:IsServer() then require(Packages.ProfileStore) else nil :: any
 
 local DATA_PREFIX = "PLAYER_"
 local DEFAULT_PROFILE_STORE_INDEX = "Default"
@@ -85,10 +84,20 @@ local DataServiceServer = {
 function DataServiceServer:init<T>(options: DataOptions<T>)
 	assert(RunService:IsServer(), "DataServiceServer can only be used on the server.")
 	assert(not self.playerStore, "DataServiceServer has already been initialized.")
+	local ProfileStore = require(Packages.ProfileStore)
+
 	Value.shouldRecordPath = true
 	self.options = options
 	self.networker = Networker.server.new("DataService", self, {})
 	self.playerStore = ProfileStore.New(options.profileStoreIndex or DEFAULT_PROFILE_STORE_INDEX, options.template)
+	self.globalData = Value.newGlobal(options.template, function(visit)
+		for _, player in Players:GetPlayers() do
+			local playerData = self.data[player]
+			if playerData then
+				visit(player, playerData)
+			end
+		end
+	end)
 
 	for _, player: Player in Players:GetPlayers() do
 		task.spawn(function()
@@ -104,8 +113,7 @@ function DataServiceServer:init<T>(options: DataOptions<T>)
 		self:_playerRemoving(player)
 	end)
 
-	self.data.Service = self
-	return self.data
+	return self.data, self, self.globalData
 end
 
 local function storeCancel(player: Player)
@@ -282,7 +290,7 @@ function DataServiceServer._initPlayer<T>(self: DataServiceServer<any>, player: 
 
 	self.data[player] = Value.new(data, nil, nil, function(replicateType: string, path: { string }, ...)
 		self.networker:fire(player, replicateType, path, ...)
-	end)
+	end, self.globalData, player)
 
 	local waitSignal = self._waitSignals[player]
 	if waitSignal then
@@ -409,6 +417,7 @@ export type DataServiceServer<T> = typeof(DataServiceServer) & {
 	data: { [Player]: Value.Value<any> },
 	options: DataOptions<T>,
 	playerStore: any,
+	globalData: Value.GlobalValue<T>,
 }
 
 export type Public<T> = {

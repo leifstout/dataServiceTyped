@@ -32,7 +32,7 @@ Add `DataServiceTyped` to your `wally.toml`:
 
 ```toml
 [dependencies]
-DataServiceTyped = "leifstout/dataservicetyped@1.0.5"
+DataServiceTyped = "termsofgit/dataservicetyped@1.1.4"
 ```
 
 Then run:
@@ -335,7 +335,63 @@ return DataServiceTyped({
 
 `overridenUserId` is spelled this way in the current API.
 
-## Next Steps
+## Server Usage
+
+```lua
+local Data = require(Path.To.Data)
+
+Data.server[player].currency(50)
+```
+
+Use the `Global` field to interact with every player's data at once:
+
+```lua
+local Data = require(Path.To.Data)
+
+Data.server.Global.currency.Add(5)
+
+Data.server.Global.currency.Changed(function(player: Player, newValue: number, oldValue: number)
+	print(player.Name, oldValue, "->", newValue)
+end)
+```
+
+Global mutations use each loaded player's normal data value, so their individual
+`Changed` callbacks still run and each change replicates to the correct client.
+Global `Changed` callbacks also run for mutations made through `Data.server[player]`.
+
+## 4) Usage on client
+
+Use Data directly on the client:
+
+```lua
+local Data = require(Path.To.Data)
+
+Data.client.currency(50)
+
+Data.client.inventory.apples.Changed(function(n: number)
+	print("Apples changed to", n)
+end)
+```
+
+### UI previews and edit mode
+
+When DataServiceTyped is required while Studio is not running, `Data.client` is
+initialized immediately from a deep copy of the data template. This allows UI
+preview tools such as UILabs to require UI components that depend on data
+without waiting for a game server.
+
+The preview value tree uses the normal `Data.client` API, including getters,
+setters, math operations, and change callbacks. Preview changes are local to the
+copy and are never replicated or saved. Once the game is running, client
+initialization continues to wait for the player's real replicated data.
+
+```lua
+-- Returns the template default in edit-mode UI previews and the player's
+-- replicated value at runtime.
+local currency = Data.client.currency()
+```
+
+## Next steps
 
 - Read about [service functions](./service-functions) for profile access, reset tools, loading hooks, and global messages.
 - Browse the [complete API reference](https://leifstout.github.io/dataServiceTyped/api)
