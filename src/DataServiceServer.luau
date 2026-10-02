@@ -71,6 +71,7 @@ type MessageData = { key: string, data: { any } }
 
 local DataServiceServer = {
 	_profiles = {} :: any,
+	_loadingPlayers = {} :: { [Player]: boolean },
 	_waitSignals = {} :: { [Player]: Signal.Signal<any> },
 	_removalFunctions = {} :: { (player: Player, data: any) -> () },
 	_globalCallbacks = {} :: { [string]: (player: Player, { any }) -> boolean? },
@@ -82,19 +83,37 @@ local DataServiceServer = {
 	@class DataServiceServer
 	The server-side service for managing player data.
 ]=]
-function DataServiceServer:init<T>(options: DataOptions<T>)
+function DataServiceServer:_configure<T>(options: DataOptions<T>)
 	assert(RunService:IsServer(), "DataServiceServer can only be used on the server.")
-	assert(not self.playerStore, "DataServiceServer has already been initialized.")
+	assert(not self.options, "DataServiceServer has already been configured.")
 	Value.shouldRecordPath = true
 	self.options = options
-	self.networker = Networker.server.new("DataService", self, {})
-	self.playerStore = ProfileStore.New(options.profileStoreIndex or DEFAULT_PROFILE_STORE_INDEX, options.template)
+	self.data.Service = self
+	return self.data
+end
 
-	for _, player: Player in Players:GetPlayers() do
-		task.spawn(function()
-			self:_playerAdded(player)
-		end)
+--[=[
+	@method init
+	@within DataServiceServer
+
+	Initializes the server and begins loading player data.
+	Call this after defining any overridden methods such as `onPlayerInit`.
+
+	```lua
+	function Data.Service:onPlayerInit(player: Player, data: DataTemplate): ()
+		data.sessionJoinTime = os.time()
 	end
+
+	Data.Service:init()
+	```
+]=]
+function DataServiceServer:init()
+	assert(RunService:IsServer(), "DataServiceServer can only be used on the server.")
+	assert(self.options, "DataServiceServer has not been configured.")
+	assert(not self.playerStore, "DataServiceServer has already been initialized.")
+	self.networker = Networker.server.new("DataService", self, {})
+	self.playerStore =
+		ProfileStore.New(self.options.profileStoreIndex or DEFAULT_PROFILE_STORE_INDEX, self.options.template)
 
 	Players.PlayerAdded:Connect(function(player: Player)
 		self:_playerAdded(player)
@@ -104,8 +123,11 @@ function DataServiceServer:init<T>(options: DataOptions<T>)
 		self:_playerRemoving(player)
 	end)
 
-	self.data.Service = self
-	return self.data
+	for _, player: Player in Players:GetPlayers() do
+		task.spawn(function()
+			self:_playerAdded(player)
+		end)
+	end
 end
 
 local function storeCancel(player: Player)
@@ -136,6 +158,11 @@ function DataServiceServer.resetData(self: DataServiceServer<any>, player: Playe
 end
 
 function DataServiceServer:_playerAdded(player: Player)
+	if self._loadingPlayers[player] or self._profiles[player] then
+		return
+	end
+	self._loadingPlayers[player] = true
+
 	local userId = self.options.overridenUserId or self.options.viewedUserId or player.UserId
 	local index = self:_getProfileKey(userId)
 
@@ -147,6 +174,14 @@ function DataServiceServer:_playerAdded(player: Player)
 		then self.playerStore.Mock:StartSessionAsync(index, storeCancel(player))
 		elseif self.options.viewedUserId or self.options.dontSave then self.playerStore:GetAsync(index)
 		else self.playerStore:StartSessionAsync(index, storeCancel(player))
+	self._loadingPlayers[player] = nil
+
+	if not profile then
+		if player:IsDescendantOf(Players) then
+			player:Kick(`Profile load fail - Please rejoin`)
+		end
+		return
+	end
 
 	profile:AddUserId(userId)
 	profile:Reconcile()
@@ -156,7 +191,7 @@ function DataServiceServer:_playerAdded(player: Player)
 	end)
 
 	if not player:IsDescendantOf(Players) then
-		player:Kick(`Profile load fail - Please rejoin`)
+		profile:EndSession()
 		return
 	end
 
@@ -268,6 +303,8 @@ end
 		print(player.Name .. " has initialized with data:", data)
 		data.sessionJoinTime = os.time() -- We can directly modify data since no connections exist yet.
 	end
+
+	Data.Service:init()
 	```
 
 	:::note
@@ -412,6 +449,7 @@ export type DataServiceServer<T> = typeof(DataServiceServer) & {
 }
 
 export type Public<T> = {
+	init: (self: any) -> (),
 	waitForData: (self: any, player: Player) -> (),
 	onPlayerInit: (self: any, player: Player, data: T) -> (),
 	getProfile: (self: any, player: Player) -> any,

@@ -17,6 +17,6 @@ export type ServerPlayerData<T> = { [Player]: Value<T> } & {
 return function<T>(options: DataOptions<T>)
 	return {
 		client = (if RunService:IsClient() then DataServiceClient:init(options.template) else {}) :: Value<T>,
-		server = (if RunService:IsServer() then DataServiceServer:init(options) else {}) :: ServerPlayerData<T>,
+		server = (if RunService:IsServer() then DataServiceServer:_configure(options) else {}) :: ServerPlayerData<T>,
 	}
 end
