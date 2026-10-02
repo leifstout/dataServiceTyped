@@ -32,7 +32,6 @@ local function adoptChildren(value: Value<any>)
 	end
 
 	for key, childValue in children do
-		rawset(childValue, CONTAINER_KEY, raw)
 		if raw[key] ~= nil then
 			continue
 		end
@@ -222,10 +221,9 @@ meta.__index = function(value: Value<any>, index: string)
 	end
 
 	local raw = value()
-	assert(
-		type(raw) == "table",
-		`attempted to index '{rawget(value, KEY_KEY)}'({typeof(raw)}) with '{index}'({typeof(index)})`
-	)
+	if type(raw) ~= "table" then
+		error(`attempted to index '{rawget(value, KEY_KEY)}'({typeof(raw)}) with '{index}'({typeof(index)})`)
+	end
 
 	local valueChildren = rawget(value, CHILDREN_KEY) :: any
 	if valueChildren and valueChildren[index] ~= nil then
@@ -244,12 +242,18 @@ meta.__index = function(value: Value<any>, index: string)
 end
 
 meta.__call = function(value: Value<any>, ...)
-	local rawParent = rawget(value, CONTAINER_KEY) :: any
+	local parentValue = rawget(value, PARENT_KEY) :: any
+	local rawParent = if parentValue then parentValue() else rawget(value, CONTAINER_KEY) :: any
 	local key = rawget(value, KEY_KEY) :: any
-	local raw = if key ~= nil then rawParent[key] else rawParent -- Root has no key
+	local hasParent = type(rawParent) == "table"
+	local raw = if not hasParent then nil elseif key ~= nil then rawParent[key] else rawParent -- Root has no key
 
 	if select("#", ...) == 0 then -- someValue()
 		return raw
+	end
+
+	if not hasParent then
+		error(`attempted to set '{key}' but its parent is {typeof(rawParent)}`)
 	end
 
 	local param, shouldReplicate = ...
@@ -318,7 +322,7 @@ function Value.new<T>(raw: T, key: string?, parent: Value<any>?, replicator: (({
 	local value = setmetatable({
 		[KEY_KEY] = key,
 		[PARENT_KEY] = parent,
-		[CONTAINER_KEY] = raw,
+		[CONTAINER_KEY] = if parent then nil else raw, -- only the root holds its table
 		[REPLICATOR_KEY] = replicator,
 		[CHILDREN_KEY] = nil,
 	}, meta)
