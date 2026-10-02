@@ -44,15 +44,23 @@ local function adoptChildren(value: Value<any>)
 	end
 end
 
-local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?)
-	if not initial then
-		local changedCbs = rawget(value, CHANGED_KEY) :: any
-		if changedCbs then
-			local raw = value()
-			for _, cb in changedCbs do
-				task.spawn(cb, raw)
-			end
+local function fireCallbacks(value: Value<any>, fnKey: string, ...)
+	local cbs = rawget(value, fnKey) :: any
+	if not cbs then
+		return
+	end
+
+	for _, cb in cbs do
+		local current = rawget(value, fnKey) :: any
+		if current == cbs or (current and table.find(current, cb)) then
+			task.spawn(cb, ...)
 		end
+	end
+end
+
+local function sendChangedSignalToChildren(value: Value<any>, initial: boolean?)
+	if not initial and rawget(value, CHANGED_KEY) then
+		fireCallbacks(value, CHANGED_KEY, value())
 	end
 
 	local childrenValues = rawget(value, CHILDREN_KEY)
@@ -68,13 +76,10 @@ end
 local function createCallbackFn(fnKey: string)
 	return function(value: Value<any>)
 		return function<T>(cb: (T) -> () -> ())
-			local changedCbs = rawget(value, fnKey) :: any
-			if not changedCbs then
-				changedCbs = {}
-				rawset(value, fnKey, changedCbs)
-			end
-
+			local changedCbs = table.clone(rawget(value, fnKey) or {}) :: any
 			table.insert(changedCbs, cb)
+			rawset(value, fnKey, changedCbs)
+
 			return function()
 				local updatedCbs = rawget(value, fnKey) :: any
 				if not updatedCbs then
@@ -86,10 +91,14 @@ local function createCallbackFn(fnKey: string)
 					return
 				end
 
-				table.remove(updatedCbs, cbIndex)
-				if #updatedCbs == 0 then
+				if #updatedCbs == 1 then
 					rawset(value, fnKey, nil)
+					return
 				end
+
+				updatedCbs = table.clone(updatedCbs)
+				table.remove(updatedCbs, cbIndex)
+				rawset(value, fnKey, updatedCbs)
 			end
 		end
 	end
@@ -120,19 +129,9 @@ local function fireChangeAndReplicate<T>(
 		local rawValue = value()
 
 		if prevRawValue == nil and rawValue ~= nil then
-			local keyAddedCbs = rawget(immediateParentValue, KEY_ADDED_KEY) :: any
-			if keyAddedCbs then
-				for _, cb in keyAddedCbs do
-					task.spawn(cb, key, rawValue)
-				end
-			end
+			fireCallbacks(immediateParentValue, KEY_ADDED_KEY, key, rawValue)
 		elseif prevRawValue ~= nil and rawValue == nil then
-			local keyRemovedCbs = rawget(immediateParentValue, KEY_REMOVED_KEY) :: any
-			if keyRemovedCbs then
-				for _, cb in keyRemovedCbs do
-					task.spawn(cb, key, prevRawValue)
-				end
-			end
+			fireCallbacks(immediateParentValue, KEY_REMOVED_KEY, key, prevRawValue)
 		end
 	end
 
@@ -146,12 +145,8 @@ local function fireChangeAndReplicate<T>(
 			replicaterFn = rawget(currentValue, REPLICATOR_KEY)
 		end
 
-		local changedCbs = rawget(currentValue, CHANGED_KEY) :: any
-		if changedCbs then
-			local v = currentValue()
-			for _, cb in changedCbs do
-				task.spawn(cb, v, prevRawValue, prevKey)
-			end
+		if rawget(currentValue, CHANGED_KEY) then
+			fireCallbacks(currentValue, CHANGED_KEY, currentValue(), prevRawValue, prevKey)
 		end
 
 		prevKey = pathKey
@@ -175,12 +170,8 @@ local function ArrayInsert<T>(value: Value<any>)
 		adoptChildren(value)
 		fireChangeAndReplicate(value, nil, "insert", shouldReplicate, item, pos)
 
-		local insertedCbs = rawget(value, ARRAY_INSERTED_KEY)
-		if insertedCbs then
-			local posInsertedAt = pos or table.find(raw, item)
-			for _, cb in insertedCbs do
-				task.spawn(cb, item, posInsertedAt)
-			end
+		if rawget(value, ARRAY_INSERTED_KEY) then
+			fireCallbacks(value, ARRAY_INSERTED_KEY, item, pos or table.find(raw, item))
 		end
 	end
 end
@@ -192,12 +183,8 @@ local function ArrayRemove<T>(value: Value<any>)
 		adoptChildren(value)
 		fireChangeAndReplicate(value, nil, "remove", shouldReplicate, pos)
 
-		local removedCbs = rawget(value, ARRAY_REMOVED_KEY)
-		if removedCbs then
-			local posRemovedFrom = pos or #raw + 1
-			for _, cb in removedCbs do
-				task.spawn(cb, removed, posRemovedFrom)
-			end
+		if rawget(value, ARRAY_REMOVED_KEY) then
+			fireCallbacks(value, ARRAY_REMOVED_KEY, removed, pos or #raw + 1)
 		end
 
 		return removed
