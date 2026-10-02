@@ -49,11 +49,20 @@ end
 
 `waitForData` yields until a player's data has finished loading, then returns the same data object you get from `Data[player]`.
 
+It returns `nil` if the player leaves before their data loads (including when the profile fails to load), so check the result before using it.
+
 ```lua
 local data = Data.Service:waitForData(player)
+if data == nil then
+	return -- Player left before their data loaded
+end
 
 data.currency(50)
 ```
+
+:::tip
+Check with `data == nil` (or `data ~= nil`). In strict mode, Luau's type solver currently doesn't narrow this type with `if not data`, `if data`, or `assert(data)`, so those report errors even though they work at runtime.
+:::
 
 You usually only need this in code that might run before the player's data exists yet, such as early `PlayerAdded` logic or another service starting up at the same time as DataServiceTyped.
 
@@ -167,7 +176,7 @@ Global messages are a good fit for cross-server rewards, purchases, gifts, and a
 -- Runs before data is sent to the client
 function Data.Service:onPlayerInit(player, data) end
 
--- Waits for Data[player] to exist
+-- Waits for Data[player] to exist (nil if the player leaves first)
 local data = Data.Service:waitForData(player)
 
 -- Gets the loaded ProfileStore profile

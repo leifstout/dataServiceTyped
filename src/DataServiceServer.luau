@@ -315,18 +315,28 @@ function DataServiceServer.onPlayerInit<T>(_self: DataServiceServer<T>, _player:
 
 function DataServiceServer._initPlayer<T>(self: DataServiceServer<any>, player: Player, data: T): ()
 	self:onPlayerInit(player, data)
+	if not self._profiles[player] then -- Removed while onPlayerInit yielded
+		return
+	end
+
 	self.networker:fire(player, "load", data)
 
 	self.data[player] = Value.new(data, nil, nil, function(replicateType: string, path: { string }, ...)
 		self.networker:fire(player, replicateType, path, ...)
 	end)
 
+	self:_resolveWaiters(player)
+end
+
+function DataServiceServer._resolveWaiters(self: DataServiceServer<any>, player: Player): ()
 	local waitSignal = self._waitSignals[player]
-	if waitSignal then
-		waitSignal:Fire()
-		waitSignal:Destroy()
-		self._waitSignals[player] = nil
+	if not waitSignal then
+		return
 	end
+
+	self._waitSignals[player] = nil
+	waitSignal:Fire()
+	waitSignal:Destroy()
 end
 
 function DataServiceServer._playerRemoving(self: DataServiceServer<any>, player: Player): ()
@@ -344,13 +354,6 @@ function DataServiceServer._playerRemoving(self: DataServiceServer<any>, player:
 
 	profile:EndSession()
 	self._profiles[player] = nil
-
-	local waitSignal = self._waitSignals[player]
-	if waitSignal then
-		waitSignal:Destroy()
-		self._waitSignals[player] = nil
-	end
-
 	self.data[player] = nil
 end
 
@@ -420,14 +423,15 @@ end
 	@within DataServiceServer
 	@yields
 	@param player Player
-	@return Data
+	@return Data?
 
 	Waits for the player's data to be initialized and returns it.
 	If the data is already available, it returns immediately.
+	Returns nil if the player leaves before their data loads.
 ]=]
-function DataServiceServer.waitForData(self: DataServiceServer<any>, player: Player): any
+function DataServiceServer.waitForData<T>(self: DataServiceServer<T>, player: Player): Value.Value<T>?
 	local data = self.data[player]
-	if data then
+	if data or not player:IsDescendantOf(Players) then
 		return data
 	end
 
@@ -435,6 +439,15 @@ function DataServiceServer.waitForData(self: DataServiceServer<any>, player: Pla
 	if not waitSignal then
 		waitSignal = Signal.new()
 		self._waitSignals[player] = waitSignal
+
+		-- Covers every way a player can leave before loading (load failure, kick, leaving mid-load)
+		local leftConnection: RBXScriptConnection
+		leftConnection = player.AncestryChanged:Connect(function()
+			if not player:IsDescendantOf(Players) then
+				leftConnection:Disconnect()
+				self:_resolveWaiters(player)
+			end
+		end)
 	end
 
 	waitSignal:Wait()
@@ -443,14 +456,14 @@ end
 
 export type DataServiceServer<T> = typeof(DataServiceServer) & {
 	networker: Networker.Server,
-	data: { [Player]: Value.Value<any> },
+	data: { [Player]: Value.Value<T> },
 	options: DataOptions<T>,
 	playerStore: any,
 }
 
 export type Public<T> = {
 	init: (self: any) -> (),
-	waitForData: (self: any, player: Player) -> (),
+	waitForData: (self: any, player: Player) -> Value.Value<T>?,
 	onPlayerInit: (self: any, player: Player, data: T) -> (),
 	getProfile: (self: any, player: Player) -> any,
 	asyncGetProfile: (self: any, userId: number | string) -> any,
