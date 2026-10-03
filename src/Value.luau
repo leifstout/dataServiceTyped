@@ -273,36 +273,39 @@ type ValueArrayMeta<T> = {
 	OnRemove: OnArrayRemove<T>,
 	OnInsert: OnArrayInsert<T>,
 }
-export type ValueBase<T> = (((T | (T) -> T)?, boolean?) -> T) & ValueMeta<T>
-type ValueArrayBase<T, U> = ValueBase<T> & ValueArrayMeta<U>
+type ValueCall<T> = ((T | (T) -> T)?, boolean?) -> T
+export type ValueBase<T> = ValueCall<T> & ValueMeta<T>
 export type Value<T> = ValueType<T>
 
 -- selene: allow(undefined_variable)
 type function ValueType(T)
-	local base = ValueBase(T)
-	if not T:is("table") then
-		return base
+	local node = types.newtable()
+	local function addProperties(from)
+		for key, prop in from:properties() do
+			node:setproperty(key, prop.read)
+		end
 	end
 
-	local indexer = T:indexer()
-	if indexer then -- { [string]: T } or { any }
-		local new = types.newtable()
-		local index = indexer.index
-		local result = indexer.readresult
-		local valueBase = if index:is("number")
-			then ValueArrayBase(T, result)
-			else types.intersectionof(ValueDictMeta(result), base)
-
-		new:setindexer(index, ValueType(result))
-		return types.intersectionof(valueBase, new)
-	else -- { a: x, b: y, c: z }
-		local children = types.newtable()
-		for key, prop in T:properties() do
-			children:setproperty(key, ValueType(prop.read))
+	addProperties(ValueMeta(T))
+	if T:is("table") then
+		local indexer = T:indexer()
+		if indexer and indexer.index:is("number") then -- { T }
+			addProperties(ValueArrayMeta(indexer.readresult))
+		elseif indexer then -- { [string]: T }
+			addProperties(ValueDictMeta(indexer.readresult))
+		else -- { a: x, b: y, c: z }
+			addProperties(ValueDictMeta(types.any))
 		end
 
-		return types.intersectionof(base, children, ValueDictMeta(types.any))
+		for key, prop in T:properties() do
+			node:setproperty(key, ValueType(prop.read))
+		end
+		if indexer then
+			node:setindexer(indexer.index, ValueType(indexer.readresult))
+		end
 	end
+
+	return types.intersectionof(ValueCall(T), node)
 end
 
 function Value.new<T>(raw: T, key: string?, parent: Value<any>?, replicator: (({ string }, any?) -> ())?): ValueType<T>
