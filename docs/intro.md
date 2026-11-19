@@ -88,6 +88,7 @@ Require `.server` on the server:
 
 ```lua
 local Data = require(path.to.Data).server
+Data.Service:init()
 ```
 
 Require `.client` on the client:
